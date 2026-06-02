@@ -48,8 +48,9 @@ export class UsersService {
     const existing = await this.usersRepository.findOne({ where: { email: dto.email } });
     if (existing) throw new ConflictException('Email already in use');
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-    const user = this.usersRepository.create({ ...dto, passwordHash });
+    const { password, ...rest } = dto;
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user = this.usersRepository.create({ ...rest, passwordHash });
     return this.usersRepository.save(user);
   }
 
