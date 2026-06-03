@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { getMyToday, clockOut } from '../../api/attendance.api';
-import { Attendance } from '../../types/attendance.types';
+import type { Attendance } from '../../types/attendance.types';
 import { useCurrentTime } from '../../hooks/useCurrentTime';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';

@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { getUsers, createUser, updateUser, deleteUser } from '../../api/users.api';
-import { User, Role, CreateUserPayload } from '../../types/user.types';
+import { type User, Role, type CreateUserPayload } from '../../types/user.types';
 import { Table } from '../../components/ui/Table';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';

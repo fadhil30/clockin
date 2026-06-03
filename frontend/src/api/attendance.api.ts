@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance';
-import { Attendance, ClockInPayload, PaginatedResponse } from '../types/attendance.types';
+import type { Attendance, ClockInPayload, PaginatedResponse } from '../types/attendance.types';
 
 export const clockIn = async (payload: ClockInPayload) => {
   const { data } = await axiosInstance.post<Attendance>('/attendance/clock-in', payload);
