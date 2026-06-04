@@ -2,19 +2,25 @@ import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { RoleGuard } from './components/shared/RoleGuard';
-import { AppShell } from './components/layout/AppShell';
+import { EmployeeShell } from './components/layout/EmployeeShell';
+import { AdminShell } from './components/layout/AdminShell';
 import { Spinner } from './components/ui/Spinner';
 import { Role } from './types/user.types';
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/employee/DashboardPage'));
 const ClockInPage = lazy(() => import('./pages/employee/ClockInPage'));
+const HistoryPage = lazy(() => import('./pages/employee/HistoryPage'));
+const TeamPage = lazy(() => import('./pages/employee/TeamPage'));
+const ProfilePage = lazy(() => import('./pages/employee/ProfilePage'));
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
 const EmployeesPage = lazy(() => import('./pages/admin/EmployeesPage'));
 const AttendancePage = lazy(() => import('./pages/admin/AttendancePage'));
 
 const Loading = () => (
-  <div className="flex h-full items-center justify-center"><Spinner size="lg" /></div>
+  <div className="flex h-full min-h-screen items-center justify-center bg-appbg">
+    <Spinner size="lg" />
+  </div>
 );
 
 export default function App() {
@@ -22,15 +28,25 @@ export default function App() {
     <Suspense fallback={<Loading />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+
+        {/* Employee routes — phone shell */}
         <Route element={<ProtectedRoute />}>
-          <Route element={<AppShell />}>
-            <Route path="/dashboard" element={<RoleGuard allowedRoles={[Role.EMPLOYEE]} redirectTo="/admin"><DashboardPage /></RoleGuard>} />
-            <Route path="/clock-in" element={<RoleGuard allowedRoles={[Role.EMPLOYEE]} redirectTo="/admin"><ClockInPage /></RoleGuard>} />
-            <Route path="/admin" element={<RoleGuard allowedRoles={[Role.ADMIN]} redirectTo="/dashboard"><AdminDashboardPage /></RoleGuard>} />
-            <Route path="/admin/employees" element={<RoleGuard allowedRoles={[Role.ADMIN]} redirectTo="/dashboard"><EmployeesPage /></RoleGuard>} />
-            <Route path="/admin/attendance" element={<RoleGuard allowedRoles={[Role.ADMIN]} redirectTo="/dashboard"><AttendancePage /></RoleGuard>} />
+          <Route element={<RoleGuard allowedRoles={[Role.EMPLOYEE]} redirectTo="/admin"><EmployeeShell /></RoleGuard>}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/clock-in" element={<ClockInPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/team" element={<TeamPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Route>
+
+          {/* Admin routes — desktop shell */}
+          <Route element={<RoleGuard allowedRoles={[Role.ADMIN]} redirectTo="/dashboard"><AdminShell /></RoleGuard>}>
+            <Route path="/admin" element={<AdminDashboardPage />} />
+            <Route path="/admin/employees" element={<EmployeesPage />} />
+            <Route path="/admin/attendance" element={<AttendancePage />} />
           </Route>
         </Route>
+
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Suspense>

@@ -1,22 +1,26 @@
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'accent' | 'outline' | 'ghost' | 'danger' | 'dangerGhost' | 'soft';
   loading?: boolean;
   size?: 'sm' | 'md' | 'lg';
 }
 
 const variantClasses = {
-  primary: 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300',
-  secondary: 'bg-gray-100 text-gray-800 hover:bg-gray-200 disabled:bg-gray-50',
-  danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300',
-  ghost: 'bg-transparent text-gray-600 hover:bg-gray-100',
+  primary: 'bg-primary text-white hover:bg-primary-600 disabled:bg-primary-300 focus:ring-primary',
+  secondary: 'bg-muted text-foreground hover:bg-primary-100 disabled:bg-muted focus:ring-primary',
+  accent: 'bg-accent text-white hover:bg-accent-strong disabled:opacity-60 focus:ring-accent',
+  outline: 'border border-primary text-primary bg-transparent hover:bg-primary-50 disabled:opacity-50 focus:ring-primary',
+  ghost: 'bg-transparent text-foreground hover:bg-muted disabled:opacity-50 focus:ring-primary',
+  danger: 'bg-destructive text-white hover:opacity-90 disabled:opacity-50 focus:ring-destructive',
+  dangerGhost: 'bg-transparent text-destructive hover:bg-red-50 disabled:opacity-50 focus:ring-destructive',
+  soft: 'bg-primary-50 text-primary hover:bg-primary-100 disabled:opacity-50 focus:ring-primary',
 };
 
 const sizeClasses = {
-  sm: 'px-3 py-1.5 text-sm',
-  md: 'px-4 py-2 text-sm',
-  lg: 'px-6 py-3 text-base',
+  sm: 'h-9 px-3 text-sm',
+  md: 'h-11 px-4 text-sm',
+  lg: 'h-[54px] px-6 text-base',
 };
 
 export const Button: React.FC<ButtonProps> = ({
@@ -25,7 +29,7 @@ export const Button: React.FC<ButtonProps> = ({
   <button
     {...props}
     disabled={disabled || loading}
-    className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    className={`inline-flex items-center justify-center gap-2 rounded-sm font-semibold transition-all active:translate-y-px active:scale-[.99] focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
   >
     {loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : null}
     {children}

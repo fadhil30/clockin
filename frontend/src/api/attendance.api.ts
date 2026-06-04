@@ -39,3 +39,18 @@ export const getAttendanceById = async (id: number) => {
   const { data } = await axiosInstance.get<Attendance>(`/attendance/${id}`);
   return data;
 };
+
+export const getPresenceToday = async () => {
+  const { data } = await axiosInstance.get<import('../types/attendance.types').PresenceResponse>('/attendance/presence/today');
+  return data;
+};
+
+export const getAdminDashboard = async () => {
+  const { data } = await axiosInstance.get<import('../types/attendance.types').AdminDashboard>('/attendance/dashboard');
+  return data;
+};
+
+export const getMySummary = async (params?: { from?: string; to?: string }) => {
+  const { data } = await axiosInstance.get<import('../types/attendance.types').MySummary>('/attendance/my/summary', { params });
+  return data;
+};

@@ -1,3 +1,156 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ——— Login page brand panel ——— */
+.login-brand-panel {
+  width: 48%;
+  background: linear-gradient(135deg, #5E2A8C 0%, #4A1D6E 60%, #3A1555 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-orb-top {
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,111,80,0.35) 0%, transparent 70%);
+  filter: blur(24px);
+  pointer-events: none;
+}
+
+.login-orb-bottom {
+  position: absolute;
+  bottom: 15%;
+  left: -40px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,111,80,0.18) 0%, transparent 70%);
+  filter: blur(32px);
+  pointer-events: none;
+}
+
+/* ——— Employee shell ——— */
+.employee-page-bg {
+  background: radial-gradient(ellipse at 60% 0%, #DCC7EC 0%, #F4F0F9 55%, #F4F0F9 100%);
+}
+
+.employee-shell-card {
+  width: 100%;
+  max-width: 430px;
+  min-height: 100vh;
+}
+
+.employee-shell-inner {
+  min-height: 100vh;
+  flex: 1;
+}
+
+@media (min-width: 480px) {
+  .employee-shell-inner {
+    min-height: 800px;
+    max-height: 900px;
+    border-radius: 34px;
+    box-shadow: 0 12px 32px rgba(46,22,71,.11), 0 30px 60px rgba(46,22,71,.13);
+  }
+}
+
+/* ——— ClockHero gradient card ——— */
+.clock-hero-gradient {
+  background: linear-gradient(135deg, #5E2A8C 0%, #4A1D6E 70%, #3A1555 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.clock-hero-orb {
+  position: absolute;
+  top: -30px;
+  right: -30px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,111,80,0.45) 0%, transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+}
+
+/* ——— Tabular numeric clock ——— */
+.tnum {
+  font-family: 'Space Grotesk', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ——— Admin dashboard donut ——— */
+.donut-segment {
+  transition: stroke-dasharray 0.5s ease;
+}
+
+/* ——— Staggered entrance animations ——— */
+@media (prefers-reduced-motion: no-preference) {
+  .animate-fade-up { animation: fade-up 0.45s cubic-bezier(.2,.7,.2,1) both; }
+  .stagger-1 { animation-delay: 0ms; }
+  .stagger-2 { animation-delay: 60ms; }
+  .stagger-3 { animation-delay: 120ms; }
+  .stagger-4 { animation-delay: 180ms; }
+  .stagger-5 { animation-delay: 240ms; }
+}
+
+@keyframes fade-up {
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ——— Success checkmark draw ——— */
+@keyframes draw-check {
+  0%   { stroke-dashoffset: 100; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.draw-check {
+  stroke-dasharray: 100;
+  animation: draw-check 0.55s cubic-bezier(.2,.7,.2,1) 0.2s both;
+}
+
+/* ——— Ring pulse ——— */
+@keyframes ring-pulse {
+  0%   { scale: 1; opacity: 0.6; }
+  100% { scale: 1.8; opacity: 0; }
+}
+
+.ring-pulse {
+  will-change: scale, opacity;
+  animation: ring-pulse 1s ease-out infinite;
+}
+
+.ring-pulse-delayed {
+  will-change: scale, opacity;
+  animation: ring-pulse 1s ease-out 0.3s infinite;
+}
+
+/* ——— Breathe CTA (filter-only — avoids paint) ——— */
+@keyframes breathe {
+  0%, 100% { scale: 1;     filter: drop-shadow(0 0 0px rgba(255,111,80,0.4)); }
+  50%       { scale: 1.015; filter: drop-shadow(0 8px 16px rgba(255,111,80,0.45)); }
+}
+
+.breathe {
+  will-change: scale, filter;
+  animation: breathe 3.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .breathe,
+  .ring-pulse,
+  .draw-check {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}

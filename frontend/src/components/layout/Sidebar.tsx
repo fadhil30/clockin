@@ -8,12 +8,12 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`;
+    `block rounded-sm px-3 py-2 text-sm font-semibold transition-colors ${isActive ? 'bg-primary-50 text-primary' : 'text-muted-foreground hover:bg-muted'}`;
 
   return (
     <aside className="flex h-full w-56 flex-col border-r border-gray-200 bg-white px-3 py-4">
       <div className="mb-6 px-3">
-        <h1 className="text-lg font-bold text-blue-600">ClockIn</h1>
+        <h1 className="text-lg font-bold text-primary">ClockIn</h1>
         <p className="truncate text-xs text-gray-500">{user?.name}</p>
       </div>
       <nav className="flex-1 space-y-1">

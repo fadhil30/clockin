@@ -1,117 +1,334 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { ArrowLeft, MapPin, Camera, RotateCcw, Home, Building2, Shield, CheckCircle2, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { clockIn, uploadPhoto } from '../../api/attendance.api';
+import { clockIn, uploadPhoto, getMyToday } from '../../api/attendance.api';
 import { useGeolocation } from '../../hooks/useGeolocation';
-import { PhotoPreview } from '../../components/shared/PhotoPreview';
 import { Button } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/Spinner';
 
-type Step = 'geo' | 'photo' | 'confirm';
+type Step = 'locating' | 'photo' | 'review' | 'success';
+type WorkMode = 'HOME' | 'OFFICE';
+
+const STEPS: Step[] = ['locating', 'photo', 'review', 'success'];
 
 const ClockInPage: React.FC = () => {
   const navigate = useNavigate();
   const { position, error: geoError, loading: geoLoading, request: requestGeo } = useGeolocation();
-  const [step, setStep] = useState<Step>('geo');
+  const [step, setStep] = useState<Step>('locating');
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [mode, setMode] = useState<WorkMode>('HOME');
   const [submitting, setSubmitting] = useState(false);
+  const [successTime, setSuccessTime] = useState<Date | null>(null);
+  const [useFallback, setUseFallback] = useState(false);
+
+  // Camera state
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState(false);
 
   useEffect(() => { requestGeo(); }, [requestGeo]);
+
+  // Auto-advance from locating after geo resolves (or short timeout)
+  useEffect(() => {
+    if (step !== 'locating') return;
+    if (!geoLoading) {
+      const t = setTimeout(() => setStep('photo'), 800);
+      return () => clearTimeout(t);
+    }
+  }, [geoLoading, step]);
+
+  // Start camera when on photo step
+  useEffect(() => {
+    if (step !== 'photo' || useFallback) return;
+    let active = true;
+    navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'user' } })
+      .then((stream) => {
+        if (!active) { stream.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => setCameraReady(true);
+        }
+      })
+      .catch(() => { if (active) setCameraError(true); });
+    return () => {
+      active = false;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      setCameraReady(false);
+    };
+  }, [step, useFallback]);
+
+  const capturePhoto = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')?.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+      setPhoto(file);
+      setPhotoPreview(URL.createObjectURL(file));
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      setStep('review');
+    }, 'image/jpeg', 0.92);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setPhoto(file);
     setPhotoPreview(URL.createObjectURL(file));
+    setStep('review');
   };
 
-  const handleRemovePhoto = () => {
+  const handleRetake = () => {
     setPhoto(null);
     setPhotoPreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    setStep('photo');
+    setCameraReady(false);
   };
 
   const handleConfirm = async () => {
-    if (!photo) { toast.error('Please upload a photo as WFH proof'); setStep('photo'); return; }
+    if (!photo) { toast.error('Photo is required'); setStep('photo'); return; }
     setSubmitting(true);
     try {
-      const record = await clockIn({ latitude: position?.latitude, longitude: position?.longitude });
-      await uploadPhoto(record.id, photo);
-      toast.success('Attendance submitted successfully!');
-      navigate('/dashboard');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to submit attendance');
-      setStep('photo');
+      let record;
+      try {
+        record = await clockIn({ latitude: position?.latitude, longitude: position?.longitude, mode });
+      } catch (clockInErr: unknown) {
+        const status = (clockInErr as { response?: { status?: number } })?.response?.status;
+        if (status === 409) {
+          // Already clocked in — get the existing record to upload the photo
+          record = await getMyToday();
+          if (!record) throw clockInErr;
+        } else {
+          throw clockInErr;
+        }
+      }
+      if (record && !record.photoUrl) {
+        await uploadPhoto(record.id, photo);
+      }
+      setSuccessTime(new Date());
+      setStep('success');
+    } catch (err: unknown) {
+      const errObj = err as { response?: { status?: number; data?: { message?: string } } };
+      console.error('[ClockIn] error:', errObj?.response?.status, errObj?.response?.data);
+      const msg = errObj?.response?.data?.message;
+      toast.error(msg ?? 'Failed to submit attendance');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const steps: Step[] = ['geo', 'photo', 'confirm'];
+  const stepIdx = STEPS.indexOf(step);
 
   return (
-    <div className="mx-auto max-w-lg">
-      <h2 className="mb-6 text-2xl font-bold text-gray-900">Clock In</h2>
-      <div className="mb-8 flex items-center gap-2">
-        {steps.map((s, i) => (
-          <React.Fragment key={s}>
-            <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${step === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>{i + 1}</div>
-            {i < steps.length - 1 ? <div className="flex-1 h-px bg-gray-200" /> : null}
-          </React.Fragment>
-        ))}
-      </div>
-      <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
-        {step === 'geo' ? (
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-800">Step 1: Location</h3>
-            {geoLoading ? <div className="flex items-center gap-2 text-gray-500"><Spinner size="sm" /> Detecting location...</div> : null}
-            {!geoLoading && position ? (
-              <p className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
-                Location detected: {position.latitude.toFixed(5)}, {position.longitude.toFixed(5)}
-              </p>
-            ) : null}
-            {!geoLoading && !position ? (
-              <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
-                {geoError || 'Location not available. You can still proceed.'}
-              </p>
-            ) : null}
-            <Button onClick={() => setStep('photo')} disabled={geoLoading} className="w-full">Next: Upload Photo</Button>
+    <div className="flex flex-col min-h-full">
+      {/* Header */}
+      {step !== 'success' && (
+        <div className="flex items-center gap-3 px-5 pt-6 pb-4">
+          <button
+            type="button"
+            aria-label="Back"
+            onClick={() => navigate('/dashboard')}
+            className="flex h-9 w-9 items-center justify-center rounded-sm bg-muted text-muted-foreground hover:bg-primary-50 transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <h2 className="flex-1 text-base font-bold text-foreground">Clock In</h2>
+          {/* Step dots */}
+          <div className="flex items-center gap-1.5">
+            {STEPS.slice(0, 3).map((s, i) => (
+              <div
+                key={s}
+                className={`h-2 rounded-full transition-all ${
+                  i < stepIdx ? 'w-2 bg-primary' :
+                  i === stepIdx ? 'w-5 bg-primary' :
+                  'w-2 bg-border'
+                }`}
+              />
+            ))}
           </div>
-        ) : step === 'photo' ? (
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-800">Step 2: Photo Proof</h3>
-            <p className="text-sm text-gray-500">Upload a photo to verify you're working from home.</p>
-            {!photoPreview ? (
-              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-300 p-8 text-center hover:bg-gray-50">
-                <span className="text-3xl">📷</span>
-                <span className="text-sm font-medium text-blue-600">Click to upload photo</span>
-                <span className="text-xs text-gray-400">JPEG, PNG, WebP — max 5 MB</span>
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileChange} />
-              </label>
+        </div>
+      )}
+
+      <div className="flex-1 px-5 pb-8">
+
+        {/* Step 1 — Locating */}
+        {step === 'locating' && (
+          <div className="animate-fade-up flex flex-col items-center pt-16 gap-4 text-center">
+            <div className="relative flex h-20 w-20 items-center justify-center">
+              <div className="absolute h-20 w-20 rounded-full bg-primary-100 ring-pulse" />
+              <div className="absolute h-14 w-14 rounded-full bg-primary-200 ring-pulse-delayed" />
+              <MapPin size={28} className="relative text-primary" />
+            </div>
+            <p className="text-base font-bold text-foreground">Verifying your location…</p>
+            <p className="text-sm text-muted-foreground">
+              {geoLoading ? 'Requesting GPS signal' : position ? 'Location confirmed' : geoError || 'Location unavailable'}
+            </p>
+            <p className="text-xs font-mono text-muted-foreground">{format(new Date(), 'HH:mm:ss')}</p>
+          </div>
+        )}
+
+        {/* Step 2 — Photo */}
+        {step === 'photo' && (
+          <div className="animate-fade-up flex flex-col gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-foreground">Take a photo</h3>
+              <p className="text-sm text-muted-foreground">A selfie to verify you're working</p>
+            </div>
+
+            {!useFallback && !cameraError ? (
+              <div className="relative overflow-hidden rounded-lg bg-black aspect-[4/5]">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="h-full w-full object-cover"
+                />
+                {/* Face oval guide */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="h-52 w-40 rounded-full border-2 border-white/60 border-dashed" />
+                </div>
+                {!cameraReady && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                    <Spinner size="md" />
+                  </div>
+                )}
+                <canvas ref={canvasRef} className="hidden" />
+              </div>
             ) : (
-              <PhotoPreview src={photoPreview} onRemove={handleRemovePhoto} className="w-full" />
+              <label className="flex aspect-[4/5] cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-primary/30 bg-primary-50 hover:bg-primary-100 transition-colors">
+                <Upload size={28} className="text-primary" />
+                <span className="text-sm font-semibold text-primary">Click to upload photo</span>
+                <span className="text-xs text-muted-foreground">JPEG, PNG, WebP — max 5 MB</span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </label>
             )}
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setStep('geo')} className="flex-1">Back</Button>
-              <Button onClick={() => photo ? setStep('confirm') : toast.error('Please upload a photo')} disabled={!photo} className="flex-1">Next: Confirm</Button>
+
+            <div className="flex flex-col gap-2">
+              {!useFallback && !cameraError && (
+                <Button onClick={capturePhoto} disabled={!cameraReady} size="lg" variant="accent" className="w-full">
+                  <Camera size={18} /> Capture
+                </Button>
+              )}
+              <button
+                type="button"
+                onClick={() => setUseFallback((v) => !v)}
+                className="text-sm font-semibold text-primary hover:text-primary-600 transition-colors text-center"
+              >
+                {useFallback ? 'Try live camera instead' : 'Upload from gallery instead'}
+              </button>
             </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-800">Step 3: Confirm Submission</h3>
-            <div className="space-y-2 rounded-lg bg-gray-50 p-4 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">Date</span><span className="font-medium">{new Date().toLocaleDateString()}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Time</span><span className="font-medium">{new Date().toLocaleTimeString()}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Location</span><span className="font-medium">{position ? `${position.latitude.toFixed(4)}, ${position.longitude.toFixed(4)}` : 'Not captured'}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Photo</span><span className="font-medium text-green-600">Ready</span></div>
+        )}
+
+        {/* Step 3 — Review */}
+        {step === 'review' && (
+          <div className="animate-fade-up flex flex-col gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-foreground">Review & confirm</h3>
+              <p className="text-sm text-muted-foreground">Check everything before submitting</p>
             </div>
-            {photoPreview ? <PhotoPreview src={photoPreview} className="w-full" /> : null}
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setStep('photo')} className="flex-1">Back</Button>
-              <Button onClick={handleConfirm} loading={submitting} className="flex-1">Confirm & Submit</Button>
+
+            {photoPreview && (
+              <img src={photoPreview} alt="Your photo" className="w-full rounded-lg object-cover aspect-[4/3] border border-border" />
+            )}
+
+            {/* Details card */}
+            <div className="rounded-sm bg-muted border border-border p-4 space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Time</span>
+                <span className="font-semibold text-foreground">{format(new Date(), 'HH:mm, MMM d')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Location</span>
+                <span className="font-semibold text-foreground">
+                  {position ? `${position.latitude.toFixed(4)}, ${position.longitude.toFixed(4)}` : 'Not captured'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Work mode</span>
+                <div className="flex rounded-sm bg-white border border-border overflow-hidden">
+                  {(['HOME', 'OFFICE'] as WorkMode[]).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMode(m)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        mode === m ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {m === 'HOME' ? <Home size={12} /> : <Building2 size={12} />}
+                      {m === 'HOME' ? 'Home' : 'Office'}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
+
+            {/* Locked note */}
+            <div className="flex items-center gap-2 rounded-sm bg-[#FEF3DD] border border-[#FBE3AE] px-3 py-2.5">
+              <Shield size={14} className="shrink-0 text-[#9A6700]" />
+              <p className="text-xs font-semibold text-[#9A6700]">Locked once submitted — timestamp and photo cannot be altered</p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={handleRetake} className="flex-1">
+                <RotateCcw size={15} /> Retake
+              </Button>
+              <Button onClick={handleConfirm} loading={submitting} variant="accent" className="flex-1">
+                Confirm clock-in
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4 — Success */}
+        {step === 'success' && (
+          <div className="animate-fade-up flex flex-col items-center pt-12 gap-5 text-center">
+            {/* Animated check */}
+            <div className="relative flex h-24 w-24 items-center justify-center">
+              <div className="absolute h-24 w-24 rounded-full bg-[#E7F6EC] ring-pulse" />
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-success">
+                <svg viewBox="0 0 36 36" className="h-8 w-8" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 18l7 7 13-13" className="draw-check" />
+                </svg>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-extrabold text-foreground">You're clocked in! 🎉</h2>
+              {successTime && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {format(successTime, 'EEEE, MMM d · HH:mm')}
+                </p>
+              )}
+            </div>
+
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E7F6EC] border border-[#BFE6CC] px-4 py-1.5 text-sm font-semibold text-[#0A7A3C]">
+              <CheckCircle2 size={15} /> Attendance recorded
+            </span>
+
+            <Button onClick={() => navigate('/dashboard')} variant="primary" size="lg" className="mt-2 w-full max-w-[280px]">
+              Back to home
+            </Button>
           </div>
         )}
       </div>
