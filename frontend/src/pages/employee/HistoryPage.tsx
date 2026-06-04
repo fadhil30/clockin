@@ -1,52 +1,49 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-import React, { useEffect, useState } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isSameDay } from 'date-fns';
+import React, { useState, useMemo } from 'react';
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday } from 'date-fns';
 import { ChevronLeft, ChevronRight, Home, Building2 } from 'lucide-react';
+import useSWR from 'swr';
 import { getMyHistory, getMySummary } from '../../api/attendance.api';
 import type { Attendance, MySummary } from '../../types/attendance.types';
 import { Spinner } from '../../components/ui/Spinner';
 
 type ViewMode = 'list' | 'month';
 
+const STATUS_COLORS: Record<string, string> = {
+  PRESENT: 'bg-success',
+  LATE: 'bg-warning',
+  LEAVE: 'bg-info',
+};
+
 const HistoryPage: React.FC = () => {
   const [view, setView] = useState<ViewMode>('list');
-  const [records, setRecords] = useState<Attendance[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState<MySummary | null>(null);
   const [calMonth, setCalMonth] = useState(() => new Date());
 
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    getMyHistory({ page, limit: 20 }).then((r) => {
-      if (!mounted) return;
-      setRecords(r.data);
-      setTotal(r.total);
-      setLoading(false);
-    });
-    return () => { mounted = false; };
-  }, [page]);
+  const { data: histData, isLoading: loading } = useSWR(
+    ['/attendance/my', page] as const,
+    ([, p]) => getMyHistory({ page: p, limit: 20 }),
+  );
+  const { data: summary } = useSWR<MySummary | null>('/attendance/my/summary', () => getMySummary());
 
-  useEffect(() => {
-    getMySummary().then(setSummary).catch(() => null);
-  }, []);
+  const records: Attendance[] = histData?.data ?? [];
+  const total = histData?.total ?? 0;
 
-  const statusColors: Record<string, string> = {
-    PRESENT: 'bg-success',
-    LATE: 'bg-warning',
-    LEAVE: 'bg-info',
-  };
+  // O(1) date lookup for calendar — build once per records change
+  const recordByDate = useMemo(() => {
+    const map = new Map<string, Attendance>();
+    for (const r of records) {
+      map.set(format(parseISO(r.date), 'yyyy-MM-dd'), r);
+    }
+    return map;
+  }, [records]);
 
   // Calendar data
   const monthStart = startOfMonth(calMonth);
   const monthEnd = endOfMonth(calMonth);
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const startPad = getDay(monthStart); // 0=Sun
+  const startPad = getDay(monthStart);
 
-  const getStatusForDay = (day: Date) =>
-    records.find((r) => isSameDay(parseISO(r.date), day));
+  const getStatusForDay = (day: Date) => recordByDate.get(format(day, 'yyyy-MM-dd'));
 
   return (
     <div className="flex flex-col gap-4 px-5 py-6">
@@ -84,7 +81,7 @@ const HistoryPage: React.FC = () => {
       </div>
 
       {/* List view */}
-      {view === 'list' && (
+      {view === 'list' ? (
         loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
           <div className="flex flex-col gap-2">
             {records.map((r) => {
@@ -116,22 +113,22 @@ const HistoryPage: React.FC = () => {
                 </div>
               );
             })}
-            {records.length === 0 && (
+            {records.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">No records yet</p>
-            )}
-            {total > 20 && (
+            ) : null}
+            {total > 20 ? (
               <div className="flex justify-center gap-3 pt-2">
                 <button type="button" disabled={page === 1} onClick={() => setPage((p) => p - 1)} className="text-sm font-semibold text-primary disabled:opacity-40">← Prev</button>
                 <span className="text-sm text-muted-foreground">Page {page}</span>
                 <button type="button" disabled={page * 20 >= total} onClick={() => setPage((p) => p + 1)} className="text-sm font-semibold text-primary disabled:opacity-40">Next →</button>
               </div>
-            )}
+            ) : null}
           </div>
         )
-      )}
+      ) : null}
 
       {/* Month calendar */}
-      {view === 'month' && (
+      {view === 'month' ? (
         <div className="rounded-sm bg-white shadow-1 border border-border p-4">
           {/* Month nav */}
           <div className="flex items-center justify-between mb-3">
@@ -156,7 +153,7 @@ const HistoryPage: React.FC = () => {
               const rec = getStatusForDay(day);
               const today = isToday(day);
               const dotColor = rec
-                ? statusColors[rec.status] ?? 'bg-muted-foreground'
+                ? STATUS_COLORS[rec.status] ?? 'bg-muted-foreground'
                 : null;
               return (
                 <div key={day.toISOString()} className={`flex flex-col items-center py-1 rounded-sm ${today ? 'bg-primary-50' : ''}`}>
@@ -177,7 +174,7 @@ const HistoryPage: React.FC = () => {
             <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-info" /> Leave</span>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

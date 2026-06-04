@@ -1,30 +1,21 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { format, parseISO, differenceInMinutes } from 'date-fns';
 import { Bell, MapPin, Home, Building2 } from 'lucide-react';
+import useSWR from 'swr';
+import toast from 'react-hot-toast';
 import { getMyToday, clockOut } from '../../api/attendance.api';
-import type { Attendance } from '../../types/attendance.types';
 import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/Spinner';
 import { Avatar } from '../../components/ui/Avatar';
-import toast from 'react-hot-toast';
-
-function useNow() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
-}
+import { useCurrentTime } from '../../hooks/useCurrentTime';
 
 function getGreeting(hour: number) {
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
 }
-
 
 function formatWorkedDuration(clockInAt: string, now: Date) {
   const mins = differenceInMinutes(now, parseISO(clockInAt));
@@ -35,26 +26,15 @@ function formatWorkedDuration(clockInAt: string, now: Date) {
 
 const DashboardPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
-  const now = useNow();
-  const [todayRecord, setTodayRecord] = useState<Attendance | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { now } = useCurrentTime();
+  const { data: todayRecord, isLoading: loading, mutate } = useSWR('/attendance/my/today', () => getMyToday());
   const [clockingOut, setClockingOut] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    getMyToday().then((rec) => {
-      if (!mounted) return;
-      setTodayRecord(rec);
-      setLoading(false);
-    });
-    return () => { mounted = false; };
-  }, []);
 
   const handleClockOut = useCallback(async () => {
     setClockingOut(true);
     try {
       const updated = await clockOut();
-      setTodayRecord(updated);
+      mutate(updated, { revalidate: false });
       toast.success('Clocked out successfully!');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -62,7 +42,7 @@ const DashboardPage: React.FC = () => {
     } finally {
       setClockingOut(false);
     }
-  }, []);
+  }, [mutate]);
 
   const hasClockedIn = !!todayRecord?.clockInAt;
   const hasClockedOut = !!todayRecord?.clockOutAt;
@@ -120,11 +100,11 @@ const DashboardPage: React.FC = () => {
               <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white">
                 Clocked in · {format(parseISO(todayRecord!.clockInAt), 'HH:mm')}
               </span>
-              {!hasClockedOut && (
+              {!hasClockedOut ? (
                 <span className="text-sm font-semibold text-accent-soft">
                   {formatWorkedDuration(todayRecord!.clockInAt, now)}
                 </span>
-              )}
+              ) : null}
             </div>
             {!hasClockedOut ? (
               <Button
@@ -147,7 +127,7 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* Today's record card (when clocked in) */}
-      {hasClockedIn && !loading && (
+      {hasClockedIn && !loading ? (
         <div className="animate-fade-up stagger-3 rounded-lg bg-white p-4 shadow-1 border border-border">
           <div className="flex items-center gap-3">
             {todayRecord!.photoUrl ? (
@@ -172,8 +152,8 @@ const DashboardPage: React.FC = () => {
                   </span>
                 ) : null}
                 <span className="flex items-center gap-0.5 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                  {todayRecord.mode === 'OFFICE' ? <Building2 size={10} /> : <Home size={10} />}
-                  {todayRecord.mode === 'OFFICE' ? 'Office' : 'Home'}
+                  {todayRecord!.mode === 'OFFICE' ? <Building2 size={10} /> : <Home size={10} />}
+                  {todayRecord!.mode === 'OFFICE' ? 'Office' : 'Home'}
                 </span>
               </div>
               <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#E7F6EC] px-2 py-0.5 text-[11px] font-semibold text-[#0A7A3C]">
@@ -183,7 +163,7 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Quick stats row */}
       <div className="animate-fade-up stagger-4 grid grid-cols-3 gap-2">

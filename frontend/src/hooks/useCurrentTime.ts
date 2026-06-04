@@ -7,5 +7,5 @@ export const useCurrentTime = () => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
-  return { date: format(now, 'EEEE, dd MMMM yyyy'), time: format(now, 'HH:mm:ss') };
+  return { now, date: format(now, 'EEEE, dd MMMM yyyy'), time: format(now, 'HH:mm:ss') };
 };

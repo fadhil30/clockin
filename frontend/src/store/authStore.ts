@@ -17,6 +17,6 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (token, user) => set({ token, user }),
       logout: () => set({ token: null, user: null }),
     }),
-    { name: 'clockin-auth' },
+    { name: 'clockin-auth', version: 1 },
   ),
 );

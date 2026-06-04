@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Home, Building2 } from 'lucide-react';
+import useSWR from 'swr';
 import { getPresenceToday } from '../../api/attendance.api';
 import type { PresencePerson, PresenceStatus } from '../../types/attendance.types';
 import { Avatar } from '../../components/ui/Avatar';
@@ -13,24 +14,27 @@ const GROUP_CONFIG: { status: PresenceStatus; label: string; dot: string }[] = [
   { status: 'not_in', label: 'Not In Yet', dot: 'bg-muted-foreground' },
 ];
 
+const CHIP_COLORS: Record<PresenceStatus, string> = {
+  in: 'bg-[#E7F6EC] text-[#0A7A3C]',
+  done: 'bg-[#E8F0FF] text-[#1D5FD0]',
+  leave: 'bg-[#FEF3DD] text-[#9A6700]',
+  not_in: 'bg-[#F1EEF6] text-[#6B6480]',
+};
+
+const EMPTY_COUNTS: Record<PresenceStatus, number> = { in: 0, done: 0, leave: 0, not_in: 0 };
+
 const TeamPage: React.FC = () => {
-  const [people, setPeople] = useState<PresencePerson[]>([]);
-  const [counts, setCounts] = useState<Record<PresenceStatus, number>>({ in: 0, done: 0, leave: 0, not_in: 0 });
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useSWR('/attendance/presence/today', () => getPresenceToday());
 
-  useEffect(() => {
-    getPresenceToday()
-      .then((r) => { setPeople(r.people); setCounts(r.counts); })
-      .catch(() => null)
-      .finally(() => setLoading(false));
-  }, []);
+  const people: PresencePerson[] = data?.people ?? [];
+  const counts = data?.counts ?? EMPTY_COUNTS;
 
-  const CHIP_COLORS: Record<PresenceStatus, string> = {
-    in: 'bg-[#E7F6EC] text-[#0A7A3C]',
-    done: 'bg-[#E8F0FF] text-[#1D5FD0]',
-    leave: 'bg-[#FEF3DD] text-[#9A6700]',
-    not_in: 'bg-[#F1EEF6] text-[#6B6480]',
-  };
+  // Group people by status once — O(n) instead of 4× O(n) filter calls
+  const groupedPeople = useMemo(() => {
+    const groups: Record<PresenceStatus, PresencePerson[]> = { in: [], done: [], leave: [], not_in: [] };
+    for (const p of people) groups[p.status].push(p);
+    return groups;
+  }, [people]);
 
   return (
     <div className="flex flex-col gap-4 px-5 py-6">
@@ -51,7 +55,7 @@ const TeamPage: React.FC = () => {
       ) : (
         <div className="flex flex-col gap-4">
           {GROUP_CONFIG.map(({ status, label, dot }) => {
-            const group = people.filter((p) => p.status === status);
+            const group = groupedPeople[status];
             if (group.length === 0) return null;
             return (
               <div key={status} className="rounded-sm bg-white shadow-1 border border-border overflow-hidden">
@@ -71,26 +75,26 @@ const TeamPage: React.FC = () => {
                       <p className="text-[11px] text-muted-foreground truncate">{person.role ?? person.department ?? '—'}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      {person.mode && (
+                      {person.mode ? (
                         <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                           {person.mode === 'OFFICE' ? <Building2 size={9} /> : <Home size={9} />}
                           {person.mode === 'OFFICE' ? 'Office' : 'Home'}
                         </span>
-                      )}
-                      {person.since && (
+                      ) : null}
+                      {person.since ? (
                         <span className="text-[10px] text-muted-foreground">
                           since {format(parseISO(person.since), 'HH:mm')}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 ))}
               </div>
             );
           })}
-          {people.length === 0 && (
+          {people.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">No team data available</p>
-          )}
+          ) : null}
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
+import useSWR from 'swr';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -38,32 +38,23 @@ const STATUS_PILL: Record<string, string> = {
 const TYPE_PILL = 'bg-[#F1EEF6] text-[#6B6480]';
 
 const EmployeesPage: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
 
+  const { data: usersData, isLoading: loading, mutate: mutateUsers } = useSWR(
+    ['/users', page] as const,
+    ([, p]) => getUsers({ page: p, limit: 10 }),
+  );
+
+  const users: User[] = usersData?.data ?? [];
+  const total = usersData?.total ?? 0;
+
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
-
-  const fetchUsers = useCallback(() => {
-    let mounted = true;
-    setLoading(true);
-    getUsers({ page, limit: 10 }).then((r) => {
-      if (!mounted) return;
-      setUsers(r.data);
-      setTotal(r.total);
-      setLoading(false);
-    });
-    return () => { mounted = false; };
-  }, [page]);
-
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   const departments = useMemo(() => [...new Set(users.map((u) => u.department).filter(Boolean))], [users]);
 
@@ -97,11 +88,11 @@ const EmployeesPage: React.FC = () => {
     try {
       await deleteUser(user.id);
       toast.success('Employee removed');
-      fetchUsers();
+      mutateUsers();
     } catch {
       toast.error('Failed to delete');
     }
-  }, [fetchUsers]);
+  }, [mutateUsers]);
 
   const onSubmit = useCallback(async (data: FormData) => {
     try {
@@ -109,6 +100,11 @@ const EmployeesPage: React.FC = () => {
       if (!clean.password) delete clean.password;
       if (!clean.employmentType) delete clean.employmentType;
       if (!clean.status) delete clean.status;
+      if (!clean.joinedAt) delete clean.joinedAt;
+      if (!clean.department) delete clean.department;
+      if (!clean.jobTitle) delete clean.jobTitle;
+      if (!clean.phone) delete clean.phone;
+      if (!clean.defaultLocation) delete clean.defaultLocation;
       if (editing) {
         await updateUser(editing.id, clean);
         toast.success('Employee updated');
@@ -117,12 +113,12 @@ const EmployeesPage: React.FC = () => {
         toast.success('Employee created');
       }
       setDrawerOpen(false);
-      fetchUsers();
+      mutateUsers();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(msg ?? 'Operation failed');
     }
-  }, [editing, fetchUsers]);
+  }, [editing, mutateUsers]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -208,12 +204,12 @@ const EmployeesPage: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {filtered.length === 0 ? (
                 <tr><td colSpan={6} className="py-10 text-center text-sm text-muted-foreground">No employees found</td></tr>
-              )}
+              ) : null}
             </tbody>
           </table>
-          {total > 10 && (
+          {total > 10 ? (
             <div className="flex items-center justify-between border-t border-border px-4 py-3">
               <span className="text-xs text-muted-foreground">Page {page} · {total} total</span>
               <div className="flex gap-2">
@@ -221,12 +217,12 @@ const EmployeesPage: React.FC = () => {
                 <Button size="sm" variant="secondary" disabled={page * 10 >= total} onClick={() => setPage((p) => p + 1)}>Next</Button>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       )}
 
       {/* Right drawer */}
-      {drawerOpen && (
+      {drawerOpen ? (
         <>
           <div className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
           <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[440px] flex-col bg-white shadow-3 border-l border-border overflow-y-auto">
@@ -279,11 +275,11 @@ const EmployeesPage: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between border-t border-border pt-4">
-                {editing && (
+                {editing ? (
                   <button type="button" onClick={() => handleDelete(editing)} className="text-sm font-semibold text-destructive hover:opacity-75 transition-opacity">
                     Remove employee
                   </button>
-                )}
+                ) : null}
                 <div className="ml-auto flex gap-2">
                   <Button type="button" variant="secondary" onClick={() => setDrawerOpen(false)}>Cancel</Button>
                   <Button type="submit" loading={isSubmitting}>{editing ? 'Save Changes' : 'Create'}</Button>
@@ -292,7 +288,7 @@ const EmployeesPage: React.FC = () => {
             </form>
           </aside>
         </>
-      )}
+      ) : null}
     </div>
   );
 };

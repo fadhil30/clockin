@@ -1,7 +1,7 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { Download, X, Home, Building2, MapPin, Lock } from 'lucide-react';
+import useSWR from 'swr';
 import { getAllAttendance, getAttendanceById } from '../../api/attendance.api';
 import type { Attendance } from '../../types/attendance.types';
 import { Avatar } from '../../components/ui/Avatar';
@@ -42,27 +42,21 @@ function exportCsv(records: Attendance[]) {
 }
 
 const AttendancePage: React.FC = () => {
-  const [records, setRecords] = useState<Attendance[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<Range>('today');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<Attendance | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    getAllAttendance({ page, limit: 20, ...getRangeDates(range) }).then((r) => {
-      if (!mounted) return;
-      setRecords(r.data);
-      setTotal(r.total);
-      setLoading(false);
-    });
-    return () => { mounted = false; };
-  }, [page, range]);
   useEffect(() => { setPage(1); }, [range]);
+
+  const { data: attendanceData, isLoading: loading } = useSWR(
+    ['/attendance', page, range] as const,
+    ([, p, r]) => getAllAttendance({ page: p, limit: 20, ...getRangeDates(r) }),
+  );
+
+  const records: Attendance[] = attendanceData?.data ?? [];
+  const total = attendanceData?.total ?? 0;
 
   const handleViewDetail = useCallback(async (id: number) => {
     const rec = await getAttendanceById(id);
@@ -159,7 +153,7 @@ const AttendancePage: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {r.latitude ? `${r.latitude.toFixed(3)}, ${r.longitude?.toFixed(3)}` : '—'}
+                    {r.latitude !== null && r.latitude !== undefined ? `${Number(r.latitude).toFixed(3)}, ${Number(r.longitude).toFixed(3)}` : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
@@ -179,12 +173,12 @@ const AttendancePage: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {filtered.length === 0 ? (
                 <tr><td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">No records found</td></tr>
-              )}
+              ) : null}
             </tbody>
           </table>
-          {total > 20 && (
+          {total > 20 ? (
             <div className="flex items-center justify-between border-t border-border px-4 py-3">
               <span className="text-xs text-muted-foreground">Page {page}</span>
               <div className="flex gap-2">
@@ -192,12 +186,12 @@ const AttendancePage: React.FC = () => {
                 <Button size="sm" variant="secondary" disabled={page * 20 >= total} onClick={() => setPage((p) => p + 1)}>Next</Button>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       )}
 
       {/* Right drawer */}
-      {drawerOpen && detail && (
+      {drawerOpen && detail ? (
         <>
           <div className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
           <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[420px] flex-col bg-white shadow-3 border-l border-border overflow-y-auto">
@@ -254,8 +248,8 @@ const AttendancePage: React.FC = () => {
                 ))}
               </div>
 
-              {/* Map link */}
-              {detail.latitude && (
+              {/* Map link — safe null check (latitude 0 is a valid coordinate) */}
+              {detail.latitude !== null && detail.latitude !== undefined ? (
                 <a
                   href={`https://maps.google.com/?q=${detail.latitude},${detail.longitude}`}
                   target="_blank"
@@ -265,18 +259,18 @@ const AttendancePage: React.FC = () => {
                   <MapPin size={15} />
                   View location on Google Maps
                 </a>
-              )}
+              ) : null}
 
               {/* Late flag */}
-              {detail.status === 'LATE' && (
+              {detail.status === 'LATE' ? (
                 <div className="rounded-sm bg-[#FEF3DD] border border-[#FBE3AE] px-3 py-2.5">
                   <p className="text-xs font-semibold text-[#9A6700]">⚠ This record was flagged as late (after 09:15)</p>
                 </div>
-              )}
+              ) : null}
             </div>
           </aside>
         </>
-      )}
+      ) : null}
     </div>
   );
 };

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { format, parseISO } from 'date-fns';
 import { Users, Clock, AlertTriangle, CalendarOff, Home, Building2 } from 'lucide-react';
+import useSWR from 'swr';
 import { getAdminDashboard } from '../../api/attendance.api';
 import type { AdminDashboard } from '../../types/attendance.types';
 import { Avatar } from '../../components/ui/Avatar';
@@ -22,7 +23,7 @@ const KpiCard: React.FC<KpiCardProps> = ({ icon, label, value, sub, accent }) =>
     </div>
     <p className={`tnum text-3xl font-extrabold ${accent ? 'text-white' : 'text-foreground'}`}>{value}</p>
     <p className={`mt-1 text-sm font-semibold ${accent ? 'text-white/70' : 'text-muted-foreground'}`}>{label}</p>
-    {sub && <p className={`text-xs ${accent ? 'text-white/50' : 'text-muted-foreground'}`}>{sub}</p>}
+    {sub ? <p className={`text-xs ${accent ? 'text-white/50' : 'text-muted-foreground'}`}>{sub}</p> : null}
   </div>
 );
 
@@ -101,13 +102,8 @@ const PresenceDonut: React.FC<DonutProps> = ({ counts }) => {
 };
 
 const AdminDashboardPage: React.FC = () => {
-  const [data, setData] = useState<AdminDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useSWR('/attendance/dashboard', () => getAdminDashboard());
   const user = useAuthStore((s) => s.user);
-
-  useEffect(() => {
-    getAdminDashboard().then(setData).finally(() => setLoading(false));
-  }, []);
 
   const greeting = (() => {
     const h = new Date().getHours();
