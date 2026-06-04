@@ -48,6 +48,7 @@ export class AttendanceService {
     const record = await this.attendanceRepo.findOne({ where: { id: recordId } });
     if (!record) throw new NotFoundException(`Record #${recordId} not found`);
     if (record.userId !== userId) throw new ForbiddenException('Cannot modify another employee\'s record');
+    if (record.photoUrl) throw new ConflictException('Proof photo already submitted and cannot be changed');
 
     const photoUrl = await this.supabaseService.uploadFile(file);
     record.photoUrl = photoUrl;
