@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>ClockIn — Attendance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* ClockIn brand — Aubergine Plum */
+  --brand-50:#F7F3FB; --brand-100:#EEE3F6; --brand-200:#DCC7EC; --brand-300:#C2A1DC;
+  --brand-400:#A273C6; --brand-500:#8348A9; --brand-600:#6A3290; --brand-700:#4A1D6E;
+  --plum-300:#C2A1DC; --plum-500:#8348A9; --plum-600:#6A3290; --plum-700:#4A1D6E;
+
+  --primary:#5E2A8C; --primary-foreground:#ffffff;
+  --secondary:#FF6F50; --secondary-foreground:#4A1606;
+  --destructive:#E5484D; --success:#12A150; --warning:#F59E0B; --info:#2D7FF9;
+
+  --background:#ffffff;
+  --foreground:#221A2E;
+  --muted:#F5F2F9;
+  --muted-foreground:#736B82;
+  --border:#E9E2F1;
+  --card:#ffffff;
+
+  /* accent is tweakable — default Coral */
+  --accent:#FF6F50;
+  --accent-strong:#E8512F;
+  --accent-soft:#FFEDE8;
+  --accent-foreground:#4A1606;
+
+  --radius:14px;
+  --radius-sm:10px;
+  --radius-lg:20px;
+
+  --app-bg:#F4F0F9;
+  --shadow-1:0 1px 2px rgba(46,22,71,.05), 0 1px 3px rgba(46,22,71,.07);
+  --shadow-2:0 2px 6px rgba(46,22,71,.06), 0 10px 24px rgba(46,22,71,.09);
+  --shadow-3:0 12px 32px rgba(46,22,71,.11), 0 30px 60px rgba(46,22,71,.13);
+  --shadow-accent:0 12px 28px -8px color-mix(in srgb, var(--accent) 55%, transparent);
+
+  font-synthesis-weight:none;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:"Plus Jakarta Sans", system-ui, sans-serif;
+  color:var(--foreground);
+  background:var(--app-bg);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+#root{min-height:100vh;}
+button{font-family:inherit;}
+input,select,textarea{font-family:inherit;}
+::selection{background:color-mix(in srgb, var(--accent) 30%, transparent);}
+
+/* scrollbars */
+.scroll-thin::-webkit-scrollbar{width:9px;height:9px;}
+.scroll-thin::-webkit-scrollbar-thumb{background:#cdd3da;border-radius:99px;border:2px solid transparent;background-clip:padding-box;}
+.scroll-thin::-webkit-scrollbar-thumb:hover{background:#b3bbc5;background-clip:padding-box;}
+.scroll-thin::-webkit-scrollbar-track{background:transparent;}
+
+/* tabular numbers for clocks / stats */
+.tnum{font-family:"Space Grotesk","Plus Jakarta Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+
+/* keyframes */
+@keyframes cw-fade-up{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+@keyframes cw-fade{from{opacity:0;}to{opacity:1;}}
+@keyframes cw-scale-in{from{opacity:0;transform:scale(.92);}to{opacity:1;transform:scale(1);}}
+@keyframes cw-pop{0%{transform:scale(.6);opacity:0;}60%{transform:scale(1.08);}100%{transform:scale(1);opacity:1;}}
+@keyframes cw-ring{0%{transform:scale(.8);opacity:.7;}100%{transform:scale(1.9);opacity:0;}}
+@keyframes cw-check{from{stroke-dashoffset:48;}to{stroke-dashoffset:0;}}
+@keyframes cw-spin{to{transform:rotate(360deg);}}
+@keyframes cw-pulse-soft{0%,100%{opacity:1;}50%{opacity:.5;}}
+@keyframes cw-shimmer{100%{background-position:-200% 0;}}
+@keyframes cw-slide-up{from{transform:translateY(100%);}to{transform:translateY(0);}}
+@keyframes cw-breathe{0%,100%{transform:scale(1);box-shadow:var(--shadow-accent);}50%{transform:scale(1.015);box-shadow:0 16px 40px -10px color-mix(in srgb,var(--accent) 60%,transparent);}}
+
+.anim-fade-up{animation:cw-fade-up .5s cubic-bezier(.2,.7,.2,1) both;}
+.anim-fade{animation:cw-fade .4s ease both;}
+.anim-scale-in{animation:cw-scale-in .4s cubic-bezier(.2,.7,.2,1) both;}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;}
+}
+
+.no-tap{ -webkit-tap-highlight-color:transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="icons.jsx"></script>
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="ui.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="employee.jsx"></script>
+<script type="text/babel" src="employee2.jsx"></script>
+<script type="text/babel" src="employee3.jsx"></script>
+<script type="text/babel" src="admin.jsx"></script>
+<script type="text/babel" src="admin2.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+
+<style id="__om-edit-overrides"></style>
+</body>
+</html>
