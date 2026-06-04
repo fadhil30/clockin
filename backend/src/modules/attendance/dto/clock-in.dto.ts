@@ -1,5 +1,6 @@
-import { IsNumber, IsOptional, Min, Max } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
+import { WorkMode } from '../../../common/enums/work-mode.enum';
 
 export class ClockInDto {
   @IsNumber()
@@ -15,4 +16,8 @@ export class ClockInDto {
   @Max(180)
   @Type(() => Number)
   longitude?: number;
+
+  @IsEnum(WorkMode)
+  @IsOptional()
+  mode?: WorkMode;
 }

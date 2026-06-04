@@ -1,5 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { WorkMode } from '../../../common/enums/work-mode.enum';
+import { AttendanceStatus } from '../../../common/enums/attendance-status.enum';
 
 @Entity('attendance_records')
 @Index(['userId', 'date'], { unique: true })
@@ -35,9 +37,31 @@ export class AttendanceRecord {
   @Column({ name: 'photo_uploaded_at', type: 'datetime', nullable: true })
   photoUploadedAt: Date;
 
-  @Column({ default: 'PRESENT' })
-  status: string;
+  @Column({ type: 'enum', enum: AttendanceStatus, default: AttendanceStatus.PRESENT })
+  status: AttendanceStatus;
+
+  @Column({ type: 'enum', enum: WorkMode, default: WorkMode.HOME })
+  mode: WorkMode;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  toJSON() {
+    const r = this as any;
+    return {
+      id: r.id,
+      userId: r.userId ?? r.user_id,
+      date: r.date,
+      clockInAt: r.clockInAt ?? r.clock_in_at ?? null,
+      clockOutAt: r.clockOutAt ?? r.clock_out_at ?? null,
+      latitude: r.latitude ?? null,
+      longitude: r.longitude ?? null,
+      photoUrl: r.photoUrl ?? r.photo_url ?? null,
+      photoUploadedAt: r.photoUploadedAt ?? r.photo_uploaded_at ?? null,
+      status: r.status,
+      mode: r.mode,
+      createdAt: r.createdAt ?? r.created_at,
+      user: r.user,
+    };
+  }
 }

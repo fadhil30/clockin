@@ -5,6 +5,11 @@ import { AttendanceRecord } from './entities/attendance.entity';
 import { ClockInDto } from './dto/clock-in.dto';
 import { AttendanceFilterDto } from './dto/attendance-filter.dto';
 import { SupabaseService } from '../../common/services/supabase.service';
+import { WorkMode } from '../../common/enums/work-mode.enum';
+import { AttendanceStatus } from '../../common/enums/attendance-status.enum';
+
+// WIB = UTC+7. Default cutoff: 09:15. Override via LATE_THRESHOLD_WIB env var (format HH:MM).
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 @Injectable()
 export class AttendanceService {
@@ -18,18 +23,28 @@ export class AttendanceService {
     return new Date().toISOString().split('T')[0];
   }
 
+  private resolveStatus(clockInAt: Date): AttendanceStatus {
+    const [cutH, cutM] = (process.env.LATE_THRESHOLD_WIB ?? '09:15').split(':').map(Number);
+    const wib = new Date(clockInAt.getTime() + WIB_OFFSET_MS);
+    const h = wib.getUTCHours();
+    const m = wib.getUTCMinutes();
+    return h > cutH || (h === cutH && m > cutM) ? AttendanceStatus.LATE : AttendanceStatus.PRESENT;
+  }
+
   async clockIn(userId: number, dto: ClockInDto): Promise<AttendanceRecord> {
     const today = this.todayString();
     const existing = await this.attendanceRepo.findOne({ where: { userId, date: today } });
     if (existing) throw new ConflictException('Already clocked in today');
 
+    const now = new Date();
     const record = this.attendanceRepo.create({
       userId,
       date: today,
-      clockInAt: new Date(),
+      clockInAt: now,
       latitude: dto.latitude ?? undefined,
       longitude: dto.longitude ?? undefined,
-      status: 'PRESENT',
+      mode: dto.mode ?? WorkMode.HOME,
+      status: this.resolveStatus(now),
     } as Partial<AttendanceRecord>);
     return this.attendanceRepo.save(record as AttendanceRecord);
   }
