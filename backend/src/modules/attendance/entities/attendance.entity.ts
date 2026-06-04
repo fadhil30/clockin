@@ -10,7 +10,7 @@ export class AttendanceRecord {
   @Column({ name: 'user_id', unsigned: true })
   userId: number;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE', eager: false })
+  @ManyToOne(() => User, { onDelete: 'RESTRICT', eager: false })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
