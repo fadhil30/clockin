@@ -62,6 +62,27 @@ export class AttendanceController {
     return this.attendanceService.getMyHistory(user.id, +page, +limit, startDate, endDate);
   }
 
+  @Get('my/summary')
+  getMySummary(
+    @CurrentUser() user: any,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.attendanceService.getMySummary(user.id, from, to);
+  }
+
+  @Get('presence/today')
+  getPresenceToday() {
+    return this.attendanceService.getPresenceToday();
+  }
+
+  @Get('dashboard')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  getDashboard() {
+    return this.attendanceService.getAdminDashboard();
+  }
+
   @Get()
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)

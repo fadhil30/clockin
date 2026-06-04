@@ -7,6 +7,8 @@ import { AttendanceFilterDto } from './dto/attendance-filter.dto';
 import { SupabaseService } from '../../common/services/supabase.service';
 import { WorkMode } from '../../common/enums/work-mode.enum';
 import { AttendanceStatus } from '../../common/enums/attendance-status.enum';
+import { User } from '../users/entities/user.entity';
+import { Role } from '../../common/enums/role.enum';
 
 // WIB = UTC+7. Default cutoff: 09:15. Override via LATE_THRESHOLD_WIB env var (format HH:MM).
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -16,6 +18,8 @@ export class AttendanceService {
   constructor(
     @InjectRepository(AttendanceRecord)
     private readonly attendanceRepo: Repository<AttendanceRecord>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly supabaseService: SupabaseService,
   ) {}
 
@@ -29,6 +33,13 @@ export class AttendanceService {
     const h = wib.getUTCHours();
     const m = wib.getUTCMinutes();
     return h > cutH || (h === cutH && m > cutM) ? AttendanceStatus.LATE : AttendanceStatus.PRESENT;
+  }
+
+  private formatAvgTime(dates: Date[]): string {
+    const avgSec = dates.reduce((s, d) => s + d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(), 0) / dates.length;
+    const h = Math.floor(avgSec / 3600);
+    const m = Math.floor((avgSec % 3600) / 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
   async clockIn(userId: number, dto: ClockInDto): Promise<AttendanceRecord> {
@@ -89,6 +100,114 @@ export class AttendanceService {
       .getManyAndCount();
 
     return { data, total, page, limit };
+  }
+
+  async getMySummary(userId: number, from?: string, to?: string) {
+    const qb = this.attendanceRepo.createQueryBuilder('a')
+      .where('a.userId = :userId', { userId });
+
+    if (from) qb.andWhere('a.date >= :from', { from });
+    if (to) qb.andWhere('a.date <= :to', { to });
+
+    const records = await qb.getMany();
+
+    const daysPresent = records.filter((r) => r.status !== AttendanceStatus.LEAVE).length;
+    const leaveTaken = records.filter((r) => r.status === AttendanceStatus.LEAVE).length;
+
+    const completed = records.filter((r) => r.clockInAt && r.clockOutAt);
+    const hoursLogged = Math.round(
+      completed.reduce((s, r) => {
+        const diff = (new Date(r.clockOutAt).getTime() - new Date(r.clockInAt).getTime()) / 3_600_000;
+        return s + diff;
+      }, 0),
+    );
+
+    const presents = records.filter((r) => r.clockInAt && r.status !== AttendanceStatus.LEAVE);
+    const avgClockIn = presents.length
+      ? this.formatAvgTime(presents.map((r) => new Date(r.clockInAt)))
+      : null;
+
+    return { daysPresent, avgClockIn, hoursLogged, leaveTaken };
+  }
+
+  async getPresenceToday() {
+    const today = this.todayString();
+
+    const employees = await this.userRepo.find({
+      where: { isActive: true, role: Role.EMPLOYEE },
+    });
+
+    const records = await this.attendanceRepo.find({ where: { date: today } });
+    const byUser = new Map(records.map((r) => [r.userId, r]));
+
+    const people = employees.map((e) => {
+      const r = byUser.get(e.id);
+      let status: 'in' | 'done' | 'leave' | 'not_in' = 'not_in';
+      if (r?.status === AttendanceStatus.LEAVE) status = 'leave';
+      else if (r && r.clockOutAt) status = 'done';
+      else if (r) status = 'in';
+      return {
+        employeeId: e.id,
+        name: e.name,
+        role: e.jobTitle ?? null,
+        department: e.department ?? null,
+        status,
+        mode: r?.mode ?? null,
+        since: r ? r.clockInAt : null,
+      };
+    });
+
+    const counts = people.reduce(
+      (acc, p) => { acc[p.status]++; return acc; },
+      { in: 0, done: 0, leave: 0, not_in: 0 } as Record<string, number>,
+    );
+
+    return { counts, people };
+  }
+
+  async getAdminDashboard() {
+    const today = this.todayString();
+
+    const totalEmployees = await this.userRepo.count({
+      where: { isActive: true, role: Role.EMPLOYEE },
+    });
+
+    const todays = await this.attendanceRepo.find({
+      where: { date: today },
+      relations: { user: true },
+      order: { clockInAt: 'DESC' },
+    });
+
+    const presentToday = todays.length;
+    const lateArrivals = todays.filter((r) => r.status === AttendanceStatus.LATE).length;
+    const onLeave = todays.filter((r) => r.status === AttendanceStatus.LEAVE).length;
+
+    const presents = todays.filter((r) => r.status !== AttendanceStatus.LEAVE && r.clockInAt);
+    const avgClockIn = presents.length
+      ? this.formatAvgTime(presents.map((r) => new Date(r.clockInAt)))
+      : null;
+
+    const recentSubmissions = todays.slice(0, 8).map((r) => ({
+      id: r.id,
+      name: r.user?.name ?? null,
+      department: r.user?.department ?? null,
+      mode: r.mode ?? null,
+      clockInAt: r.clockInAt,
+      status: r.status,
+      photoUrl: r.photoUrl ?? null,
+    }));
+
+    const presence = await this.getPresenceToday();
+
+    return {
+      presentToday,
+      totalEmployees,
+      lateArrivals,
+      onLeave,
+      avgClockIn,
+      presence: presence.counts,
+      recentSubmissions,
+    };
   }
 
   async findAll(filter: AttendanceFilterDto) {
